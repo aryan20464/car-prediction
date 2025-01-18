@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -12,7 +11,7 @@ def load_data(file):
     return pd.read_excel(file)
 
 # Function for preprocessing
-def preprocess_data(cardf):
+def preprocess_data(cardf, train_cols=None):
     cardf = cardf.drop(cardf.columns[0], axis=1)
     cardf['age'] = 2024 - cardf["Year"]
     cardf = cardf.drop(["Year"], axis=1)
@@ -25,21 +24,30 @@ def preprocess_data(cardf):
         numcols[col] = numcols[col].fillna(numcols[col].mean())
     
     objcols_dummy = pd.get_dummies(objcols, columns=['Location', 'Fuel_Type', 'Transmission', 'Owner_Type'])
+    
+    # If this is the training data, store the columns to use in the test data
+    if train_cols is None:
+        train_cols = objcols_dummy.columns
+    
+    # Ensure the test data has the same columns as the training data
+    objcols_dummy = objcols_dummy.reindex(columns=train_cols, fill_value=0)
+    
     cardf_final = pd.concat([numcols, objcols_dummy], axis=1)
     
-    return cardf_final, numcols, objcols_dummy
+    return cardf_final, train_cols
 
 # Streamlit UI
 st.title("Car Price Prediction")
 
 # Upload training data
 train_file = st.file_uploader("Upload Training Data (Excel)", type=["xlsx"])
+train_cols = None  # Variable to store columns for one-hot encoding
 if train_file is not None:
     train_df = load_data(train_file)
     st.write("Training Data", train_df.head())
     
     # Preprocess training data
-    cardf_final_train, numcols_train, objcols_dummy_train = preprocess_data(train_df)
+    cardf_final_train, train_cols = preprocess_data(train_df)
     
     # Prepare X and y
     X_train = cardf_final_train.drop(["Price"], axis=1)
@@ -58,7 +66,7 @@ if train_file is not None:
         st.write("Test Data", test_df.head())
         
         # Preprocess test data
-        cardf_final_test, numcols_test, objcols_dummy_test = preprocess_data(test_df)
+        cardf_final_test, _ = preprocess_data(test_df, train_cols)
         
         # Prepare X_test for prediction
         X_test = cardf_final_test.drop(["Price"], axis=1)
